@@ -1,6 +1,4 @@
 data/
-results/
-results1/
 weights/
 __pycache__/
 *.pyc

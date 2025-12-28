@@ -1,104 +1,109 @@
 # Traffic Light Recognition with ViT-based Detector
 
-本项目实现了基于 Vision Transformer (ViT) 的交通信号灯检测模型。项目中包含两种架构的尝试：基于 DETR 的简化版本和基于 YOLO head 的版本。目前的训练流程主要基于 YOLO 架构。
-
-四张V100训练13个小时
-
+本项目实现了基于 Vision Transformer (ViT) 骨干网络和 YOLO 检测头的交通信号灯检测模型。项目旨在探索 Transformer 在目标检测任务中的应用，特别是结合 YOLO 高效检测头的设计。
 
 ## 项目结构
 
 ```
 traffic_light_project/
-  data/
-    images/       # 原始图片文件夹
-    labels/       # 原始 YOLO 格式标签文件夹
-    train/        # 划分后的训练集
-    val/          # 划分后的验证集
-  src/
-    ...           # 源代码文件
-  weights/        # 存放训练好的模型权重
-  results/        # 存放训练结果
-  requirements.txt # 项目依赖
-  run_train.sh    # 训练启动脚本
+├── data/                 # 数据集目录
+│   ├── test/             # 测试集图片
+│   ├── train/            # 训练集 (images/ 和 labels/)
+│   └── val/              # 验证集 (images/ 和 labels/)
+├── src/                  # 源代码目录
+│   ├── dataset.py        # 数据集加载 (YOLODataset)
+│   ├── loss_yolo.py      # YOLO 损失函数定义
+│   ├── model_yolo.py     # ViT-YOLO 模型定义
+│   ├── prepare_data.py   # 数据清洗与划分脚本
+│   ├── train.py          # 模型训练脚本
+│   ├── utils.py          # 通用工具函数
+│   └── visualize_test.py # 推理与可视化脚本
+├── weights/              # 存放模型权重
+├── results/              # 存放训练结果
+├── requirements.txt      # 项目依赖
+├── run_train.sh          # 训练启动脚本 (Shell)
+└── README.md             # 项目说明文档
 ```
 
-## 文件功能详解 (`src/` 目录)
+## 资源下载
 
-以下是 `src/` 目录下各个文件的详细功能说明：
+本项目的相关资源已上传至 HuggingFace，请在开始前下载：
 
-### 数据处理
-*   **`dataset.py`**
-    *   **功能**: 定义了 `YOLODataset` 类，继承自 `torch.utils.data.Dataset`。
-    *   **作用**: 负责读取图像文件和对应的 `.txt` 标签文件。它将图像转换为 Tensor，并处理标签格式，以便 `DataLoader` 加载。
-*   **`prepare_data.py`**
-    *   **功能**: 数据预处理脚本。
-    *   **作用**: 
-        1.  **清洗数据**: 检查 `data/images` 和 `data/labels`，移除没有对应标签或标签为空的图片。
-        2.  **划分数据集**: 将数据按默认 8:2 的比例划分为训练集 (`data/train`) 和验证集 (`data/val`)。
-    *   **使用**: 在开始训练前运行一次。
+*   **数据集**: [traffic_light_data](https://huggingface.co/datasets/YYdream/traffic_light_data)
+*   **预训练权重**: [traffic_light_weights](https://huggingface.co/YYdream/traffic_light_weights)
 
-### 模型定义
-*   **`model_yolo.py`**
-    *   **功能**: 定义了 `ViTYOLO` 模型。
-    *   **作用**: 这是当前训练脚本主要使用的模型。它使用 `timm` 库加载 Vision Transformer (ViT) 作为骨干网络提取特征，并连接一个自定义的 `YOLOHead` 进行边界框回归和类别分类。
-*   **`model.py`**
-    *   **功能**: 定义了 `ViTDet` 模型。
-    *   **作用**: 这是一个基于 DETR (Detection Transformer) 架构的实现，包含 ViT Backbone 和 Transformer Decoder。
-    *   *注意*: 目前的 `train.py` 默认使用 `model_yolo.py`，此文件可能用于对比实验。
+## 环境配置
 
-### 损失函数
-*   **`loss_yolo.py`**
-    *   **功能**: 定义了 `YOLOLoss` 类。
-    *   **作用**: 实现了适用于 YOLO 架构的损失计算，包括：
-        *   坐标损失 (MSE Loss)
-        *   置信度损失 (BCE Loss)
-        *   分类损失 (CrossEntropy Loss)
-*   **`loss.py`**
-    *   **功能**: 定义了 `HungarianMatcher` 和相关损失。
-    *   **作用**: 用于 `ViTDet` 模型的二分图匹配损失（集合预测损失）。
+1.  **安装依赖**:
+    建议使用 Conda 创建虚拟环境，然后安装依赖：
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-### 训练与推理
-*   **`train.py`**
-    *   **功能**: 主训练脚本。
-    *   **作用**: 
-        *   解析命令行参数（Epochs, Batch Size, LR 等）。
-        *   初始化数据加载器、模型 (`ViTYOLO`) 和优化器。
-        *   执行训练循环，计算 Loss 并更新权重。
-        *   定期保存模型权重到 `weights/` 目录。
-*   **`visualize_test.py`**
-    *   **功能**: 测试集可视化脚本。
-    *   **作用**: 加载训练好的权重，对验证集图片进行推理，并将预测的边界框绘制在图片上，用于直观评估模型效果。
-*   **`utils.py`**
-    *   **功能**: 通用工具函数。
-    *   **作用**: 包含坐标转换（如 `cxcywh` 转 `xyxy`）、IoU 计算 (`generalized_box_iou`) 等辅助函数。
+## 数据准备
 
-## 使用方式
+在开始训练之前，需要对原始数据进行清洗和划分。
 
-### 1. 环境配置
-安装项目所需的 Python 依赖库：
-```bash
-pip install -r requirements.txt
-```
+1.  **准备原始数据**:
+    将原始图片放入 `data/images`，对应的 YOLO 格式标签放入 `data/labels`。
 
-### 2. 数据准备
-确保原始数据位于 `data/images` 和 `data/labels` 中，然后运行数据准备脚本：
-```bash
-python src/prepare_data.py
-```
+2.  **运行预处理脚本**:
+    该脚本会移除标签为空的无效数据，并按默认 8:2 的比例将数据划分为训练集 (`data/train`) 和验证集 (`data/val`)。
+    ```bash
+    python src/prepare_data.py
+    ```
+    *注意*: 如果 `data/train` 和 `data/val` 目录已存在，脚本可能会跳过划分步骤或报错，请确保在原始数据准备好后运行一次。
 
-### 3. 开始训练
-推荐使用提供的 Shell 脚本进行训练，它已经配置好了常用的路径和参数：
+## 模型训练
+
+### 1. 使用 Shell 脚本 (推荐)
+项目提供了一个 `run_train.sh` 脚本，配置了常用的训练参数并支持后台运行。
+请根据你的环境修改脚本中的 `PYTHON_EXEC` (Python解释器路径) 和 `PROJECT_ROOT` (项目根目录路径)。
+
 ```bash
 bash run_train.sh
 ```
-或者手动运行 Python 命令：
+
+### 2. 手动运行 Python 命令
+你也可以直接运行 `src/train.py`，并根据需要调整参数：
+
 ```bash
-python src/train.py --epochs 100 --batch_size 16 --device cuda
+python src/train.py \
+    --data_root ./data \
+    --epochs 100 \
+    --batch_size 16 \
+    --device cuda \
+    --pretrained_path weights/resnet18_pretrained.pth
 ```
 
-### 4. 验证与可视化
-训练完成后，可以使用以下命令查看模型在验证集上的表现：
+**主要参数说明**:
+*   `--data_root`: 数据集根目录 (默认为 `./data`)
+*   `--epochs`: 训练轮数
+*   `--batch_size`: 批次大小
+*   `--device`: 使用设备 (`cuda` 或 `cpu`)
+*   `--gpus`: 指定 GPU ID (例如 `0` 或 `0,1`)
+*   `--pretrained_path`: 预训练权重路径 (可选)
+
+## 推理与可视化
+
+训练完成后，可以使用 `src/visualize_test.py` 加载模型权重，并在验证集或测试集上进行推理可视化。
+
 ```bash
-python src/visualize_val.py --checkpoint weights/checkpoint_best.pth
+python src/visualize_test.py \
+    --checkpoint weights/checkpoint_best.pth \
+    --split val \
+    --device cuda
 ```
+
+**参数说明**:
+*   `--checkpoint`: 模型权重文件路径 (必须指定，或确保目录下有 `checkpoint_epoch_*.pth`)
+*   `--split`: 数据集划分，可选 `val` (验证集) 或 `test` (测试集)
+*   `--device`: 推理设备
+
+## 核心文件说明 (`src/`)
+
+*   **`model_yolo.py`**: 定义了 `ViTYOLO` 类。模型使用 `timm` 库加载 Vision Transformer 作为特征提取器，并连接自定义的 YOLO Head 进行目标检测。
+*   **`loss_yolo.py`**: 实现了 YOLO 的损失计算，包含坐标回归损失 (MSE)、置信度损失 (BCE) 和分类损失 (CrossEntropy)。
+*   **`dataset.py`**: 定义了 `YOLODataset`，负责加载图像和标签，并进行必要的数据增强（如亮度、对比度调整）。
+*   **`train.py`**: 训练主程序，包含数据加载、模型初始化、训练循环和模型保存逻辑。
 
